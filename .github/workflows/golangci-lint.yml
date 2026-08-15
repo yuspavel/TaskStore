@@ -34,7 +34,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           # Необязательно: укажите конкретную версию линтера
-          version: v2.1.2
+          version: latest
           only-new-issues: true
           # Аргументы командной строки (по умолчанию проверяет ./...)
           args: --timeout=5m
