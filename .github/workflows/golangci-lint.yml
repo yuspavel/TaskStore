@@ -1,0 +1,40 @@
+name: golangci-lint
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
+  # Раскомментируйте строку ниже, если хотите видеть только новые ошибки в PR
+  pull-requests: read 
+
+jobs:
+  golangci:
+    name: Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false # golangci-lint управляет своим кэшем сам
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          # Необязательно: укажите конкретную версию линтера
+          version: v2.1.2
+          only-new-issues: true
+          # Аргументы командной строки (по умолчанию проверяет ./...)
+          args: --timeout=5m
