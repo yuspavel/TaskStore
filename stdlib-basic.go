@@ -29,6 +29,8 @@ func NewTaskServer() *taskServer {
 	return &taskServer{store: store}
 }
 
+var validate = validator.New()
+
 func (ts *taskServer) createTaskHandler(w http.ResponseWriter, req *http.Request) {
 	log.Printf("handling task create at %s\n", req.URL.Path)
 
