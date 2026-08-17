@@ -17,6 +17,7 @@ import (
 
 	"example.com/internal/middleware"
 	"example.com/internal/taskstore"
+	"github.com/go-playground/validator"
 )
 
 type taskServer struct {
@@ -34,9 +35,9 @@ func (ts *taskServer) createTaskHandler(w http.ResponseWriter, req *http.Request
 	// Types used internally in this handler to (de-)serialize the request and
 	// response from/to JSON.
 	type RequestTask struct {
-		Text string    `json:"text"`
-		Tags []string  `json:"tags"`
-		Due  time.Time `json:"due"`
+		Text string    `json:"text" validate:"required"`
+		Tags []string  `json:"tags" validate:"required"`
+		Due  time.Time `json:"due" validate:"required,datetime=2006-01-02"`
 	}
 
 	type ResponseId struct {
@@ -46,21 +47,55 @@ func (ts *taskServer) createTaskHandler(w http.ResponseWriter, req *http.Request
 	// Enforce a JSON Content-Type.
 	contentType := req.Header.Get("Content-Type")
 	mediatype, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if mediatype != "application/json" {
-		http.Error(w, "expect application/json Content-Type", http.StatusUnsupportedMediaType)
+	if err != nil || mediatype != "application/json" {
+		code := http.StatusBadRequest
+		if mediatype != "application/json" {
+			code = http.StatusUnsupportedMediaType
+		}
+		http.Error(w, "expect application/json Content-Type", code)
 		return
 	}
 
 	dec := json.NewDecoder(req.Body)
 	dec.DisallowUnknownFields()
+
 	var rt RequestTask
+
 	if err := dec.Decode(&rt); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
 		return
+	}
+
+	if err := validate.Struct(rt); err != nil {
+		validationErrors, ok := err.(validator.ValidationErrors)
+		if !ok {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+
+		var errs []map[string]string
+
+		for _, e := range validationErrors {
+
+			fieldErr := map[string]string{"field": e.Field()}
+			switch e.Field() {
+			case "text":
+				fieldErr["error"] = "test is required"
+			case "tags":
+				fieldErr["error"] = "tags are required"
+			case "due":
+				fieldErr["error"] = "date format must be DD-MM-YYYY"
+			default:
+				fieldErr["error"] = "validation failed"
+			}
+
+			errs = append(errs, fieldErr)
+		}
+		resp := map[string]any{"errors": errs}
+		_ = json.NewEncoder(w).Encode(resp)
 	}
 
 	id := ts.store.CreateTask(rt.Text, rt.Tags, rt.Due)
@@ -71,6 +106,7 @@ func (ts *taskServer) createTaskHandler(w http.ResponseWriter, req *http.Request
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
+
 }
 
 func (ts *taskServer) getAllTasksHandler(w http.ResponseWriter, req *http.Request) {
